@@ -1,32 +1,16 @@
 import React, { useState, useEffect } from "react";
 
 export default function App() {
-  const [userKey, setUserKey] = useState("");
-  const [keyConfirmed, setKeyConfirmed] = useState(false);
   const [diaryText, setDiaryText] = useState("");
-  const [shift] = useState(3);
   const [entryIds, setEntryIds] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [decryptKey, setDecryptKey] = useState("");
   const [decryptedText, setDecryptedText] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [savedKey, setSavedKey] = useState("");
 
   const SERVER_URL = "https://secure-diary-server.onrender.com";
-
-  const caesarEncrypt = (text, shift) => {
-    return text
-      .split("")
-      .map((char) => {
-        if (/[a-z]/.test(char)) {
-          return String.fromCharCode(((char.charCodeAt(0) - 97 + shift) % 26) + 97);
-        } else if (/[A-Z]/.test(char)) {
-          return String.fromCharCode(((char.charCodeAt(0) - 65 + shift) % 26) + 65);
-        }
-        return char;
-      })
-      .join("");
-  };
 
   const loadEntries = async () => {
     try {
@@ -45,22 +29,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleKeyConfirm = () => {
-    if (userKey.length !== 4 || !/^\d{4}$/.test(userKey)) {
-      setStatus("⚠️ Please enter a valid 4-digit key!");
-      return;
-    }
-    setKeyConfirmed(true);
-    setStatus("✅ Key set! You can now write your diary entry.");
-  };
-
-  const handleReset = () => {
-    setKeyConfirmed(false);
-    setUserKey("");
-    setDiaryText("");
-    setStatus("");
-  };
-
   const handleSave = async () => {
     if (!diaryText.trim()) {
       setStatus("⚠️ Please write something before saving!");
@@ -68,31 +36,25 @@ export default function App() {
     }
 
     setLoading(true);
-    setStatus("🔐 Encrypting and sending to server...");
+    setStatus("📤 Sending to server for encryption...");
 
     try {
-      const encrypted = caesarEncrypt(diaryText, shift);
-      
+      // Send PLAIN TEXT to server - server will encrypt it
       const res = await fetch(`${SERVER_URL}/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          encryptedText: encrypted,
-          key: Number(userKey)
+          plainText: diaryText  // Sending plain text!
         }),
       });
 
       if (!res.ok) throw new Error("Save failed");
 
       const data = await res.json();
-      setStatus(`✅ Diary saved! Entry ID: ${data.id} | Your key: ${userKey}`);
+      setSavedKey(data.key); // Server generates and returns the key
+      setStatus(`✅ Diary encrypted and saved! Entry ID: ${data.id}`);
       setDiaryText("");
       loadEntries();
-      
-      // Reset for next entry
-      setTimeout(() => {
-        handleReset();
-      }, 5000);
     } catch (err) {
       setStatus("❌ Server connection failed!");
       console.error(err);
@@ -146,7 +108,7 @@ export default function App() {
 
       const data = await res.json();
       setDecryptedText(data.decrypted);
-      setStatus("✅ Server verified key and sent decrypted content!");
+      setStatus("✅ Server decrypted and sent your diary!");
     } catch (err) {
       setStatus("❌ Connection error!");
       console.error(err);
@@ -167,7 +129,7 @@ export default function App() {
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-white">Secure E-Diary</h1>
-                <p className="text-purple-300 text-sm">End-to-End Encrypted System</p>
+                <p className="text-purple-300 text-sm">Server-Side Encryption System</p>
               </div>
             </div>
             <a 
@@ -193,97 +155,42 @@ export default function App() {
               <h2 className="text-2xl font-bold text-white">Write New Entry</h2>
             </div>
 
-            {!keyConfirmed ? (
-              // Step 1: Set Encryption Key
-              <div className="space-y-6">
-                <div className="bg-yellow-900 bg-opacity-50 border-2 border-yellow-500 rounded-lg p-4">
-                  <p className="text-yellow-200 text-sm text-center">
-                    🔑 <strong>Step 1:</strong> Choose your 4-digit encryption key
-                  </p>
-                </div>
+            <textarea
+              className="w-full h-64 p-4 bg-black bg-opacity-30 border-2 border-purple-500 rounded-xl text-white placeholder-purple-300 focus:border-purple-400 focus:outline-none resize-none"
+              placeholder="Write your private thoughts here... (Plain text will be sent to server for encryption)"
+              value={diaryText}
+              onChange={(e) => setDiaryText(e.target.value)}
+              disabled={loading}
+            />
 
-                <div>
-                  <label className="block text-purple-200 font-semibold mb-3 text-center">
-                    Enter Your 4-Digit Encryption Key:
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="\d{4}"
-                    maxLength="4"
-                    className="w-full p-4 bg-black bg-opacity-30 border-2 border-purple-500 rounded-xl text-white text-center text-3xl font-mono tracking-widest placeholder-purple-300 focus:border-purple-400 focus:outline-none"
-                    placeholder="0000"
-                    value={userKey}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, '');
-                      if (value.length <= 4) {
-                        setUserKey(value);
-                      }
-                    }}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter' && userKey.length === 4) {
-                        handleKeyConfirm();
-                      }
-                    }}
-                  />
-                  <p className="text-purple-300 text-xs mt-2 text-center">
-                    Choose a memorable 4-digit number (1000-9999)
-                  </p>
-                </div>
+            <button
+              onClick={handleSave}
+              disabled={loading || !diaryText.trim()}
+              className="w-full mt-6 bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-bold text-lg shadow-lg"
+            >
+              {loading ? "⏳ Sending to Server..." : "📤 Send to Server for Encryption"}
+            </button>
 
-                <button
-                  onClick={handleKeyConfirm}
-                  disabled={userKey.length !== 4}
-                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-bold text-lg shadow-lg"
-                >
-                  ✅ Confirm Key & Continue
-                </button>
-
-                <div className="bg-purple-950 bg-opacity-50 border border-purple-600 rounded-lg p-4">
-                  <p className="text-purple-200 text-sm">
-                    ⚠️ <strong>Remember this key!</strong> You'll need it to decrypt your entry later.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              // Step 2: Write Diary
-              <div className="space-y-6">
-                <div className="bg-green-900 bg-opacity-50 border-2 border-green-400 rounded-lg p-4">
-                  <p className="text-green-200 text-sm text-center">
-                    🔑 <strong>Your Encryption Key:</strong> <span className="text-2xl font-mono tracking-widest">{userKey}</span>
-                  </p>
-                  <button
-                    onClick={handleReset}
-                    className="mt-2 w-full text-green-300 hover:text-green-100 text-xs underline"
-                  >
-                    Change Key
-                  </button>
-                </div>
-
-                <textarea
-                  className="w-full h-64 p-4 bg-black bg-opacity-30 border-2 border-purple-500 rounded-xl text-white placeholder-purple-300 focus:border-purple-400 focus:outline-none resize-none"
-                  placeholder="Write your private thoughts here..."
-                  value={diaryText}
-                  onChange={(e) => setDiaryText(e.target.value)}
-                  disabled={loading}
-                  autoFocus
-                />
-
-                <button
-                  onClick={handleSave}
-                  disabled={loading || !diaryText.trim()}
-                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-bold text-lg shadow-lg"
-                >
-                  {loading ? "⏳ Encrypting..." : "💾 Encrypt & Send to Server"}
-                </button>
-
-                <div className="bg-purple-950 bg-opacity-50 border border-purple-600 rounded-lg p-4">
-                  <p className="text-purple-200 text-sm">
-                    🔒 <strong>Caesar Cipher (Shift: {shift})</strong> - Your text will be encrypted with key: {userKey}
-                  </p>
-                </div>
+            {/* Display Generated Key from Server */}
+            {savedKey && (
+              <div className="mt-4 bg-green-900 bg-opacity-50 border-2 border-green-400 rounded-lg p-4">
+                <p className="text-green-200 text-sm mb-2">
+                  🔑 <strong>Server Generated Your Decryption Key:</strong>
+                </p>
+                <p className="text-green-100 text-3xl font-mono font-bold text-center tracking-widest bg-black bg-opacity-40 py-3 rounded">
+                  {savedKey}
+                </p>
+                <p className="text-green-200 text-xs mt-2 text-center">
+                  ⚠️ Save this key! You need it to decrypt your entry later.
+                </p>
               </div>
             )}
+
+            <div className="mt-4 bg-purple-950 bg-opacity-50 border border-purple-600 rounded-lg p-4">
+              <p className="text-purple-200 text-sm">
+                🔒 <strong>How it works:</strong> Your plain diary is sent to the server, where it's encrypted with a random 4-digit key. Only you receive the key!
+              </p>
+            </div>
           </div>
 
           {/* Decrypt Section */}
@@ -337,7 +244,7 @@ export default function App() {
                   disabled={loading}
                 />
                 <p className="text-indigo-300 text-xs mt-2 text-center">
-                  Enter the 4-digit key you used when saving
+                  Enter the 4-digit key from the server
                 </p>
               </div>
 
@@ -346,12 +253,12 @@ export default function App() {
                 disabled={loading || !selectedId || decryptKey.length !== 4}
                 className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-4 rounded-xl hover:from-indigo-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-bold text-lg shadow-lg"
               >
-                {loading ? "⏳ Verifying..." : "🔓 Request Decryption"}
+                {loading ? "⏳ Requesting..." : "🔓 Request Decryption from Server"}
               </button>
 
               <div className="bg-indigo-950 bg-opacity-50 border border-yellow-500 rounded-lg p-4">
                 <p className="text-yellow-200 text-sm">
-                  ⚠️ <strong>Server-Side Verification</strong> - Wrong key = Access Denied!
+                  ⚠️ <strong>Server-Side Decryption</strong> - Server decrypts and verifies your key before sending data
                 </p>
               </div>
             </div>
@@ -370,7 +277,7 @@ export default function App() {
           <div className="bg-gradient-to-br from-green-900 to-emerald-900 rounded-2xl p-8 shadow-2xl border border-green-500">
             <div className="flex items-center gap-3 mb-6">
               <span className="text-3xl">📖</span>
-              <h3 className="text-2xl font-bold text-white">Decrypted Content</h3>
+              <h3 className="text-2xl font-bold text-white">Decrypted Content from Server</h3>
             </div>
             <div className="bg-black bg-opacity-40 rounded-xl p-6 border border-green-400">
               <p className="text-white text-lg leading-relaxed whitespace-pre-wrap">
@@ -388,22 +295,22 @@ export default function App() {
               <div className="flex items-start gap-3">
                 <span className="text-2xl">1️⃣</span>
                 <div>
-                  <strong className="text-white">Choose Your Key</strong>
-                  <p className="text-sm">Set your own 4-digit encryption key</p>
+                  <strong className="text-white">Write Plain Diary</strong>
+                  <p className="text-sm">You write your diary in plain text</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <span className="text-2xl">2️⃣</span>
                 <div>
-                  <strong className="text-white">Write & Encrypt</strong>
-                  <p className="text-sm">Client encrypts diary with Caesar cipher</p>
+                  <strong className="text-white">Send to Server</strong>
+                  <p className="text-sm">Plain text sent to server</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <span className="text-2xl">3️⃣</span>
                 <div>
-                  <strong className="text-white">Send to Server</strong>
-                  <p className="text-sm">Encrypted data transmitted securely</p>
+                  <strong className="text-white">Server Encrypts</strong>
+                  <p className="text-sm">Server generates key & encrypts your diary</p>
                 </div>
               </div>
             </div>
@@ -411,21 +318,21 @@ export default function App() {
               <div className="flex items-start gap-3">
                 <span className="text-2xl">4️⃣</span>
                 <div>
-                  <strong className="text-white">Server Stores</strong>
-                  <p className="text-sm">Server stores encrypted content</p>
+                  <strong className="text-white">Receive Key</strong>
+                  <p className="text-sm">Server sends you the 4-digit key</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <span className="text-2xl">5️⃣</span>
                 <div>
-                  <strong className="text-white">Request Decrypt</strong>
-                  <p className="text-sm">Enter your 4-digit key to decrypt</p>
+                  <strong className="text-white">Request Decryption</strong>
+                  <p className="text-sm">Send key to server to decrypt</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <span className="text-2xl">6️⃣</span>
                 <div>
-                  <strong className="text-white">Verify & Access</strong>
+                  <strong className="text-white">Receive Plain Text</strong>
                   <p className="text-sm text-red-300">❌ Wrong key = No access!</p>
                 </div>
               </div>
