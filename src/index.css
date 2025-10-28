@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 🩵 Add custom base styles */
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 font-sans;
+  }
+
+  h1 {
+    @apply text-3xl font-bold text-blue-600;
+  }
+}
+
+/* 💚 Add custom reusable components */
+@layer components {
+  .btn-primary {
+    @apply bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition;
+  }
+}
+
+/* 💛 Add custom utilities */
+@layer utilities {
+  .text-shadow {
+    text-shadow: 1px 2px 4px rgba(0, 0, 0, 0.3);
+  }
+}
