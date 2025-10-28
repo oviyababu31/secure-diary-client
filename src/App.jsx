@@ -9,8 +9,14 @@ export default function App() {
   const [decryptedText, setDecryptedText] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [generatedKey, setGeneratedKey] = useState("");
 
- const SERVER_URL = "https://secure-diary-server.onrender.com";
+  const SERVER_URL = "https://secure-diary-server.onrender.com";
+
+  // Generate a random 4-digit key
+  const generateKey = () => {
+    return Math.floor(1000 + Math.random() * 9000).toString();
+  };
 
   const caesarEncrypt = (text, shift) => {
     return text
@@ -54,16 +60,21 @@ export default function App() {
 
     try {
       const encrypted = caesarEncrypt(diaryText, shift);
+      const key = generateKey();
       
       const res = await fetch(`${SERVER_URL}/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ encryptedText: encrypted }),
+        body: JSON.stringify({ 
+          encryptedText: encrypted,
+          key: Number(key)
+        }),
       });
 
       if (!res.ok) throw new Error("Save failed");
 
       const data = await res.json();
+      setGeneratedKey(key);
       setStatus(`✅ Diary saved! Entry ID: ${data.id}`);
       setDiaryText("");
       loadEntries();
@@ -83,6 +94,11 @@ export default function App() {
 
     if (!decryptKey.trim()) {
       setStatus("⚠️ Please enter decryption key!");
+      return;
+    }
+
+    if (decryptKey.length !== 4 || !/^\d{4}$/.test(decryptKey)) {
+      setStatus("⚠️ Key must be exactly 4 digits!");
       return;
     }
 
@@ -178,9 +194,24 @@ export default function App() {
               {loading ? "⏳ Encrypting..." : "💾 Encrypt & Send to Server"}
             </button>
 
+            {/* Display Generated Key */}
+            {generatedKey && (
+              <div className="mt-4 bg-green-900 bg-opacity-50 border-2 border-green-400 rounded-lg p-4">
+                <p className="text-green-200 text-sm mb-2">
+                  🔑 <strong>Your 4-Digit Secret Key:</strong>
+                </p>
+                <p className="text-green-100 text-3xl font-mono font-bold text-center tracking-widest bg-black bg-opacity-40 py-3 rounded">
+                  {generatedKey}
+                </p>
+                <p className="text-green-200 text-xs mt-2 text-center">
+                  ⚠️ Save this key! You'll need it to decrypt your entry.
+                </p>
+              </div>
+            )}
+
             <div className="mt-4 bg-purple-950 bg-opacity-50 border border-purple-600 rounded-lg p-4">
               <p className="text-purple-200 text-sm">
-                🔒 <strong>Caesar Cipher (Shift: {shift})</strong> - Your text is encrypted before transmission
+                🔒 <strong>Caesar Cipher (Shift: {shift})</strong> - Your text is encrypted with a random 4-digit key
               </p>
             </div>
           </div>
@@ -217,21 +248,32 @@ export default function App() {
 
               <div>
                 <label className="block text-indigo-200 font-semibold mb-3">
-                  🔑 Decryption Key:
+                  🔑 4-Digit Decryption Key:
                 </label>
                 <input
-                  type="number"
-                  className="w-full p-4 bg-black bg-opacity-30 border-2 border-indigo-500 rounded-xl text-white placeholder-indigo-300 focus:border-indigo-400 focus:outline-none"
-                  placeholder="Enter secret key (server will verify)"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{4}"
+                  maxLength="4"
+                  className="w-full p-4 bg-black bg-opacity-30 border-2 border-indigo-500 rounded-xl text-white text-center text-2xl font-mono tracking-widest placeholder-indigo-300 focus:border-indigo-400 focus:outline-none"
+                  placeholder="0000"
                   value={decryptKey}
-                  onChange={(e) => setDecryptKey(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '');
+                    if (value.length <= 4) {
+                      setDecryptKey(value);
+                    }
+                  }}
                   disabled={loading}
                 />
+                <p className="text-indigo-300 text-xs mt-2 text-center">
+                  Enter the 4-digit key you received when saving
+                </p>
               </div>
 
               <button
                 onClick={handleDecrypt}
-                disabled={loading || !selectedId || !decryptKey}
+                disabled={loading || !selectedId || decryptKey.length !== 4}
                 className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-4 rounded-xl hover:from-indigo-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-bold text-lg shadow-lg"
               >
                 {loading ? "⏳ Verifying..." : "🔓 Request Decryption"}
@@ -277,21 +319,21 @@ export default function App() {
                 <span className="text-2xl">1️⃣</span>
                 <div>
                   <strong className="text-white">Write & Encrypt</strong>
-                  <p className="text-sm">Client encrypts diary with Caesar cipher</p>
+                  <p className="text-sm">Client encrypts diary with Caesar cipher & generates 4-digit key</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <span className="text-2xl">2️⃣</span>
                 <div>
                   <strong className="text-white">Send to Server</strong>
-                  <p className="text-sm">Encrypted data transmitted securely</p>
+                  <p className="text-sm">Encrypted data transmitted securely with key hash</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <span className="text-2xl">3️⃣</span>
                 <div>
                   <strong className="text-white">Server Stores</strong>
-                  <p className="text-sm">Server cannot read encrypted content</p>
+                  <p className="text-sm">Server stores encrypted content (cannot read it)</p>
                 </div>
               </div>
             </div>
@@ -300,14 +342,14 @@ export default function App() {
                 <span className="text-2xl">4️⃣</span>
                 <div>
                   <strong className="text-white">Request Decrypt</strong>
-                  <p className="text-sm">Client asks server to decrypt with key</p>
+                  <p className="text-sm">Enter your 4-digit key to decrypt</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <span className="text-2xl">5️⃣</span>
                 <div>
                   <strong className="text-white">Verify Key</strong>
-                  <p className="text-sm">Server checks if key matches</p>
+                  <p className="text-sm">Server validates the 4-digit key</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
